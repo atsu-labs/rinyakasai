@@ -132,7 +132,7 @@
     }
 
     .state-dot-keipo   { background: #cc0000; }
-    .state-dot-chuitu  { background: #ffcc00; }
+    .state-dot-chuitu  { background: #ccaa33; }
     .state-dot-nasi    { background: #95a5a6; border: 1px solid #bbb; }
 
     /* ポップアップのカスタム */
@@ -245,10 +245,10 @@
   // ここに属性値と色の対応を追加してください
   // ======================================================
   const CATEGORY_COLORS = {
-    '函館':   { color: '#e74c3c', label: '函館' },
-    '高松':   { color: '#3498db', label: '高松' },
-    '川汲':   { color: '#2ecc71', label: '川汲' },
-    '戸井泊': { color: '#f39c12', label: '戸井泊' },
+    '函館':   { color: '#95a5a6', label: '函館' },
+    '高松':   { color: '#95a5a6', label: '高松' },
+    '川汲':   { color: '#95a5a6', label: '川汲' },
+    '戸井泊': { color: '#95a5a6', label: '戸井泊' },
     'default': { color: '#95a5a6', label: 'その他' }
   };
 
@@ -258,7 +258,7 @@
   // ======================================================
   const STATE_COLORS = {
     '警報':  '#cc0000',
-    '注意報': '#ffcc00',
+    '注意報': '#ccaa33',
     'なし':  null        // カテゴリ本来の色を使用
   };
 
@@ -328,9 +328,9 @@
     return {
       fillColor: color,
       color: color,
-      weight: 2,
+      weight: 1,
       opacity: 0.9,
-      fillOpacity: 0.5
+      fillOpacity: 0.7
     };
   }
 
@@ -394,7 +394,7 @@
             mouseover: function (e) {
               const l = e.target;
               if (l.setStyle) {
-                l.setStyle({ weight: 4, fillOpacity: 0.75 });
+                l.setStyle({ weight: 3, fillOpacity: 0.9 });
                 l.bringToFront();
               }
             },
@@ -436,7 +436,6 @@
       const div = L.DomUtil.create('div', 'legend');
       div.innerHTML = '<h4>凡例</h4>';
 
-      // 状態の色
       div.innerHTML += `
         <div class="legend-item">
           <span class="legend-color state-dot-keipo"></span>
@@ -445,17 +444,11 @@
         <div class="legend-item">
           <span class="legend-color state-dot-chuitu"></span>
           <span>注意報</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color" style="background:#95a5a6;"></span>
+          <span>なし</span>
         </div>`;
-
-      // 区域の色（なし状態）
-      Object.entries(CATEGORY_COLORS).forEach(([key, val]) => {
-        if (key === 'default') return;
-        div.innerHTML += `
-          <div class="legend-item">
-            <span class="legend-color" style="background:${val.color};"></span>
-            <span>${val.label}（なし）</span>
-          </div>`;
-      });
 
       return div;
     };
