@@ -8,6 +8,9 @@
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 
+  <!-- leaflet-image: Leaflet map → Canvas export -->
+  <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
+
   <style>
     * {
       margin: 0;
@@ -135,6 +138,30 @@
     .state-dot-chuitu  { background: #ccaa33; }
     .state-dot-nasi    { background: #95a5a6; border: 1px solid #bbb; }
 
+    /* 画像エクスポートボタン */
+    #btn-export {
+      margin-left: auto;
+      padding: 6px 14px;
+      background: #3498db;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    #btn-export:hover:not(:disabled) {
+      background: #2980b9;
+    }
+
+    #btn-export:disabled {
+      background: #7fb3d3;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
     /* ポップアップのカスタム */
     .popup-content {
       font-size: 13px;
@@ -163,6 +190,7 @@
 
 <header>
   <h1>🗺 函館市 GeoJSON マップ</h1>
+  <button id="btn-export" disabled title="地図のPNG画像をダウンロードします">📷 PNG保存</button>
 </header>
 
 <div id="map"></div>
@@ -285,10 +313,19 @@
   const map = L.map('map').setView([41.7688, 140.7291], 13);
 
   // タイルレイヤー（OpenStreetMap）
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // crossOrigin: 'anonymous' を指定することで leaflet-image による Canvas 書き出しを試みます。
+  // OSMタイルサーバがCORSヘッダーを返さない場合はcanvasがtaintedになり、
+  // 書き出し時にエラーが発生します（その際は画面上にエラーメッセージが表示されます）。
+  const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
+    maxZoom: 19,
+    crossOrigin: 'anonymous'
   }).addTo(map);
+
+  // タイルが1枚以上読み込まれたらエクスポートボタンを有効化
+  tileLayer.once('tileload', function () {
+    document.getElementById('btn-export').disabled = false;
+  });
 
   // ======================================================
   // ユーティリティ関数
@@ -459,6 +496,79 @@
       });
     });
   }
+
+  // ======================================================
+  // 画像エクスポート用ユーティリティ
+  // ======================================================
+
+  /**
+   * タイムスタンプ文字列を生成する（例: 2026-03-16_153045）
+   * @returns {string}
+   */
+  function formatTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm   = String(now.getMonth() + 1).padStart(2, '0');
+    const dd   = String(now.getDate()).padStart(2, '0');
+    const hh   = String(now.getHours()).padStart(2, '0');
+    const min  = String(now.getMinutes()).padStart(2, '0');
+    const ss   = String(now.getSeconds()).padStart(2, '0');
+    return yyyy + '-' + mm + '-' + dd + '_' + hh + min + ss;
+  }
+
+  /**
+   * Blob をファイルとしてダウンロードさせる
+   * @param {Blob} blob
+   * @param {string} filename
+   */
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ======================================================
+  // 画像エクスポート処理
+  // ======================================================
+  document.getElementById('btn-export').addEventListener('click', function () {
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ 処理中…';
+
+    // エクスポート前にポップアップを閉じる
+    map.closePopup();
+
+    leafletImage(map, function (err, canvas) {
+      btn.disabled = false;
+      btn.textContent = '📷 PNG保存';
+
+      if (err) {
+        // CORS tainted canvas などのエラー
+        alert(
+          '画像の書き出しに失敗しました。\n\n' +
+          '原因: ' + err + '\n\n' +
+          '【よくある原因と対処法】\n' +
+          'OSMタイルがCORSヘッダーを返さないため、Canvasがtaintedになった可能性があります。\n' +
+          '対処: タイルソースをCORSを許可するものに変更するか、\n' +
+          '同一オリジンでタイルをホストしてください。'
+        );
+        return;
+      }
+
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          alert('PNG生成に失敗しました。ブラウザの設定や拡張機能をご確認ください。');
+          return;
+        }
+        downloadBlob(blob, 'rinyakasai-map_' + formatTimestamp() + '.png');
+      }, 'image/png');
+    });
+  });
 </script>
 
 </body>
