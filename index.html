@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>函館市 GeoJSON マップ</title>
+  <title>函館市 林野火災警報・注意報 マップ</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+
 
   <style>
     * {
@@ -135,6 +137,30 @@
     .state-dot-chuitu  { background: #ccaa33; }
     .state-dot-nasi    { background: #95a5a6; border: 1px solid #bbb; }
 
+    /* 画像エクスポートボタン */
+    #btn-export {
+      margin-left: auto;
+      padding: 6px 14px;
+      background: #3498db;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    #btn-export:hover:not(:disabled) {
+      background: #2980b9;
+    }
+
+    #btn-export:disabled {
+      background: #7fb3d3;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
     /* ポップアップのカスタム */
     .popup-content {
       font-size: 13px;
@@ -162,7 +188,8 @@
 <body>
 
 <header>
-  <h1>🗺 函館市 GeoJSON マップ</h1>
+  <h1>🗺 函館市 林野火災警報・注意報 マップ</h1>
+  <button id="btn-export" disabled title="地図のPNG画像をダウンロードします">📷 PNG保存</button>
 </header>
 
 <div id="map"></div>
@@ -285,10 +312,19 @@
   const map = L.map('map').setView([41.7688, 140.7291], 13);
 
   // タイルレイヤー（OpenStreetMap）
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // crossOrigin: 'anonymous' を指定することで leaflet-image による Canvas 書き出しを試みます。
+  // OSMタイルサーバがCORSヘッダーを返さない場合はcanvasがtaintedになり、
+  // 書き出し時にエラーが発生します（その際は画面上にエラーメッセージが表示されます）。
+  const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
+    maxZoom: 19,
+    crossOrigin: 'anonymous'
   }).addTo(map);
+
+  // タイルが1枚以上読み込まれたらエクスポートボタンを有効化
+  tileLayer.once('tileload', function () {
+    document.getElementById('btn-export').disabled = false;
+  });
 
   // ======================================================
   // ユーティリティ関数
@@ -458,6 +494,381 @@
         });
       });
     });
+  }
+
+  // ======================================================
+  // 画像エクスポート用ユーティリティ
+  // ======================================================
+
+  /**
+   * タイムスタンプ文字列を生成する（例: 2026-03-16_153045）
+   * @returns {string}
+   */
+  function formatTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm   = String(now.getMonth() + 1).padStart(2, '0');
+    const dd   = String(now.getDate()).padStart(2, '0');
+    const hh   = String(now.getHours()).padStart(2, '0');
+    const min  = String(now.getMinutes()).padStart(2, '0');
+    const ss   = String(now.getSeconds()).padStart(2, '0');
+    return yyyy + '-' + mm + '-' + dd + '_' + hh + min + ss;
+  }
+
+  /**
+   * Blob をファイルとしてダウンロードさせる
+   * @param {Blob} blob
+   * @param {string} filename
+   */
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ======================================================
+  // 画像エクスポート処理
+  // 1. ポリゴン範囲に fitBounds
+  // 2. moveend + タイル読み込み完了を待機
+  // 3. Canvas 合成 → ポリゴン範囲で切り抜き → 保存
+  // ======================================================
+
+  /**
+   * タイルがすべて読み込まれるまで待つ Promise
+   * @returns {Promise<void>}
+   */
+  function waitForTilesLoaded() {
+    return new Promise(function (resolve) {
+      const mapEl  = document.getElementById('map');
+      const loading = mapEl.querySelectorAll('.leaflet-tile-loading');
+      if (loading.length === 0) {
+        // ロード中タイルなし → 少し待って解決
+        setTimeout(resolve, 150);
+        return;
+      }
+      const onLoad = function () {
+        tileLayer.off('load', onLoad);
+        setTimeout(resolve, 150);
+      };
+      tileLayer.on('load', onLoad);
+      // 5 秒で強制解決（タイムアウト）
+      setTimeout(function () { tileLayer.off('load', onLoad); resolve(); }, 5000);
+    });
+  }
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ 処理中…';
+
+    map.closePopup();
+
+    function doExport() {
+      buildMapCanvas()
+        .then(function (canvas) {
+          btn.disabled = false;
+          btn.textContent = '📷 PNG保存';
+          canvas.toBlob(function (blob) {
+            if (!blob) {
+              alert('PNG生成に失敗しました。ブラウザの設定や拡張機能をご確認ください。');
+              return;
+            }
+            downloadBlob(blob, 'rinyakasai-map_' + formatTimestamp() + '.png');
+          }, 'image/png');
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = '📷 PNG保存';
+          alert('画像の書き出しに失敗しました。\n\n原因: ' + err);
+        });
+    }
+
+    if (geojsonLayer && geojsonLayer.getBounds().isValid()) {
+      // ポリゴン全体が収まるよう fitBounds してからエクスポート
+      map.once('moveend', function () {
+        waitForTilesLoaded().then(doExport);
+      });
+      map.fitBounds(geojsonLayer.getBounds(), { padding: [20, 20] });
+    } else {
+      doExport();
+    }
+  });
+
+  /**
+   * Leaflet マップを Canvas に合成して返す
+   * getBoundingClientRect() で実際の描画位置を取得することで
+   * パン・ズーム後の CSS transform 積み重ねによるズレを回避する
+   */
+  function buildMapCanvas() {
+    const mapEl   = document.getElementById('map');
+    const w       = mapEl.clientWidth;
+    const h       = mapEl.clientHeight;
+    const mapRect = mapEl.getBoundingClientRect();
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    // 背景塗り
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(0, 0, w, h);
+
+    // ── タイルを描画 ──────────────────────────────────
+    const tileImgs = Array.from(
+      mapEl.querySelectorAll('.leaflet-tile-pane img.leaflet-tile')
+    );
+    for (const img of tileImgs) {
+      if (!img.complete || img.naturalWidth === 0) continue;
+      const r = img.getBoundingClientRect();
+      const x = Math.round(r.left - mapRect.left);
+      const y = Math.round(r.top  - mapRect.top);
+      try {
+        ctx.drawImage(img, x, y, Math.round(r.width), Math.round(r.height));
+      } catch (e) {
+        // CORS でブロックされたタイルはスキップ
+      }
+    }
+
+    // ── GeoJSON ポリゴンを Canvas に直接描画 ──────────
+    // SVG 画像化方式はブラウザの座標変換に依存してズレるため、
+    // latLngToContainerPoint() でピクセル座標に変換して描画する
+    if (geojsonLayer) {
+      geojsonLayer.eachLayer(function (layer) {
+        if (!layer.feature) return;
+        const style = featureStyle(layer.feature);
+        if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
+          drawPathOnCanvas(ctx, layer.getLatLngs(), style, layer instanceof L.Polygon);
+        }
+      });
+    }
+
+    // ── ポリゴンのバウンディングボックスで切り抜き ──────────
+    const PADDING = 20; // px
+    const cropped = cropToGeojsonBounds(canvas, PADDING);
+
+    // ── 凡例を右上に描画 ─────────────────────────────
+    drawLegendOnCanvas(cropped);
+
+    // ── 出典を左下に描画 ────────────────────────────
+    drawAttributionOnCanvas(cropped);
+
+    return Promise.resolve(cropped);
+  }
+
+  /**
+   * LatLng 配列（ネスト可）を Canvas に描画する
+   */
+  function drawPathOnCanvas(ctx, latlngs, style, fill) {
+    function drawRing(ring) {
+      if (!ring || ring.length === 0) return;
+      ctx.beginPath();
+      ring.forEach(function (ll, i) {
+        const pt = map.latLngToContainerPoint(ll);
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else         ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.closePath();
+      if (fill) {
+        ctx.fillStyle = hexToRgba(style.fillColor, style.fillOpacity != null ? style.fillOpacity : 0.7);
+        ctx.fill('evenodd');
+      }
+      ctx.strokeStyle = hexToRgba(style.color, style.opacity != null ? style.opacity : 0.9);
+      ctx.lineWidth   = style.weight != null ? style.weight : 1;
+      ctx.stroke();
+    }
+
+    // ネスト構造を解決: MultiPolygon / Polygon+holes / LineString
+    if (Array.isArray(latlngs[0]) && Array.isArray(latlngs[0][0])) {
+      latlngs.forEach(function (polygon) { polygon.forEach(drawRing); });
+    } else if (Array.isArray(latlngs[0])) {
+      latlngs.forEach(drawRing);
+    } else {
+      drawRing(latlngs);
+    }
+  }
+
+  /**
+   * 切り抜き済み canvas の右上に凡例を描画する
+   * @param {HTMLCanvasElement} canvas
+   */
+  function drawLegendOnCanvas(canvas) {
+    const ctx    = canvas.getContext('2d');
+    const items  = [
+      { color: '#cc0000', label: '警報' },
+      { color: '#ccaa33', label: '注意報' },
+      { color: '#95a5a6', label: 'なし' }
+    ];
+
+    const FONT_SIZE   = 13;
+    const LINE_H      = 22;
+    const BOX_SIZE    = 14;
+    const PAD_X       = 12;
+    const PAD_Y       = 10;
+    const MARGIN      = 10; // canvas 端からの余白
+    const TITLE       = '凡例';
+
+    ctx.font = 'bold ' + FONT_SIZE + 'px "Helvetica Neue", Arial, sans-serif';
+    const titleW = ctx.measureText(TITLE).width;
+
+    ctx.font = FONT_SIZE + 'px "Helvetica Neue", Arial, sans-serif';
+    const labelW = Math.max(...items.map(function (it) {
+      return ctx.measureText(it.label).width;
+    }));
+
+    const boxW = PAD_X * 2 + BOX_SIZE + 6 + Math.max(titleW, labelW);
+    const boxH = PAD_Y * 2 + LINE_H + items.length * LINE_H;
+
+    const bx = canvas.width  - MARGIN - boxW;
+    const by = MARGIN;
+
+    // 背景
+    ctx.save();
+    ctx.fillStyle   = 'rgba(255,255,255,0.92)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, bx, by, boxW, boxH, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // タイトル
+    ctx.fillStyle = '#333';
+    ctx.font      = 'bold ' + FONT_SIZE + 'px "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(TITLE, bx + PAD_X, by + PAD_Y + FONT_SIZE);
+
+    // 区切り線
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx + PAD_X,         by + PAD_Y + LINE_H + 4);
+    ctx.lineTo(bx + boxW - PAD_X,  by + PAD_Y + LINE_H + 4);
+    ctx.stroke();
+
+    // 凡例項目
+    ctx.font = FONT_SIZE + 'px "Helvetica Neue", Arial, sans-serif';
+    items.forEach(function (item, i) {
+      const iy = by + PAD_Y + LINE_H * (i + 1) + LINE_H * 0.1;
+
+      // 色四角
+      ctx.fillStyle   = item.color;
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth   = 1;
+      roundRect(ctx, bx + PAD_X, iy + 4, BOX_SIZE, BOX_SIZE, 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // ラベル
+      ctx.fillStyle = '#333';
+      ctx.fillText(item.label, bx + PAD_X + BOX_SIZE + 6, iy + FONT_SIZE);
+    });
+
+    ctx.restore();
+  }
+
+  /**
+   * 切り抜き済み canvas の左下に出典を描画する
+   * @param {HTMLCanvasElement} canvas
+   */
+  function drawAttributionOnCanvas(canvas) {
+    const TEXT    = '© OpenStreetMap / e-Stat 小地域（町丁・字等）境界データ';
+    const FONT_SIZE = 11;
+    const PAD_X   = 8;
+    const PAD_Y   = 5;
+    const MARGIN  = 6;
+
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.font = FONT_SIZE + 'px "Helvetica Neue", Arial, sans-serif';
+
+    const tw  = ctx.measureText(TEXT).width;
+    const bw  = tw + PAD_X * 2;
+    const bh  = FONT_SIZE + PAD_Y * 2;
+    const bx  = MARGIN;
+    const by  = canvas.height - MARGIN - bh;
+
+    // 半透明白背景
+    ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    roundRect(ctx, bx, by, bw, bh, 3);
+    ctx.fill();
+
+    // テキスト
+    ctx.fillStyle = '#333';
+    ctx.fillText(TEXT, bx + PAD_X, by + PAD_Y + FONT_SIZE - 1);
+    ctx.restore();
+  }
+
+  /**
+   * 角丸矩形パスを生成する（fill/stroke は呼び出し側で行う）
+   */
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h,     x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y,         x + r, y);
+    ctx.closePath();
+  }
+
+  /**
+   * #rrggbb カラーコードを rgba() 文字列に変換する
+   */
+  function hexToRgba(hex, alpha) {
+    alpha = alpha != null ? alpha : 1;
+    if (!hex || !hex.startsWith('#')) return 'rgba(0,0,0,' + alpha + ')';
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  /**
+   * geojsonLayer の地理的バウンディングボックスをコンテナ座標に変換し、
+   * そのエリアを元 canvas から切り抜いて返す
+   * @param {HTMLCanvasElement} srcCanvas - 合成済みの全体 canvas
+   * @param {number} padding - 切り抜き矩形の余白 (px)
+   * @returns {HTMLCanvasElement}
+   */
+  function cropToGeojsonBounds(srcCanvas, padding) {
+    if (!geojsonLayer || !geojsonLayer.getBounds().isValid()) {
+      return srcCanvas;
+    }
+
+    const bounds   = geojsonLayer.getBounds();
+    const sw       = map.latLngToContainerPoint(bounds.getSouthWest());
+    const ne       = map.latLngToContainerPoint(bounds.getNorthEast());
+
+    const cropX = Math.max(0, Math.floor(Math.min(sw.x, ne.x)) - padding);
+    const cropY = Math.max(0, Math.floor(Math.min(sw.y, ne.y)) - padding);
+    const cropW = Math.min(
+      srcCanvas.width  - cropX,
+      Math.ceil(Math.abs(ne.x - sw.x)) + padding * 2
+    );
+    const cropH = Math.min(
+      srcCanvas.height - cropY,
+      Math.ceil(Math.abs(sw.y - ne.y)) + padding * 2
+    );
+
+    if (cropW <= 0 || cropH <= 0) return srcCanvas;
+
+    const cropped = document.createElement('canvas');
+    cropped.width  = cropW;
+    cropped.height = cropH;
+    cropped.getContext('2d').drawImage(
+      srcCanvas,
+      cropX, cropY, cropW, cropH,
+      0, 0, cropW, cropH
+    );
+    return cropped;
   }
 </script>
 
