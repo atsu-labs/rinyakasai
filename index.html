@@ -115,10 +115,10 @@
   // ここに属性値と色の対応を追加してください
   // ======================================================
   const CATEGORY_COLORS = {
-    'A': { color: '#e74c3c', label: 'カテゴリ A' },
-    'B': { color: '#3498db', label: 'カテゴリ B' },
-    'C': { color: '#2ecc71', label: 'カテゴリ C' },
-    'D': { color: '#f39c12', label: 'カテゴリ D' },
+    '函館':   { color: '#e74c3c', label: '函館' },
+    '高松':   { color: '#3498db', label: '高松' },
+    '川汲':   { color: '#2ecc71', label: '川汲' },
+    '戸井泊': { color: '#f39c12', label: '戸井泊' },
     'default': { color: '#95a5a6', label: 'その他' }
   };
 
@@ -126,7 +126,7 @@
   // 設定: 色を決めるために使う属性名
   // GeoJSONのpropertiesの中のキーを指定してください
   // ======================================================
-  const COLOR_ATTRIBUTE = 'category';
+  const COLOR_ATTRIBUTE = '区域';
 
   // ======================================================
   // 地図の初期化（函館市付近）
@@ -184,7 +184,7 @@
 
     return `
       <div class="popup-content">
-        <strong>${properties.name || '(名称なし)'}</strong>
+        <strong>${properties.S_NAME || properties.name || '(名称なし)'}</strong>
         <span class="popup-category" style="background:${color};">${value || '-'}</span>
         <table style="border-collapse:collapse;margin-top:4px;">${props}</table>
       </div>`;
@@ -193,7 +193,7 @@
   // ======================================================
   // GeoJSON の読み込みと表示
   // ======================================================
-  fetch('data.geojson')
+  fetch('rinya.geojson')
     .then(response => {
       if (!response.ok) throw new Error('GeoJSON の読み込みに失敗しました: ' + response.status);
       return response.json();
@@ -255,7 +255,7 @@
       info.onAdd = function () {
         const div = L.DomUtil.create('div');
         div.style.cssText = 'background:#fff;padding:10px;border-radius:4px;border:1px solid #e74c3c;color:#e74c3c;font-size:13px;';
-        div.innerHTML = '⚠ data.geojson が見つかりません。<br>ファイルを配置してください。';
+        div.innerHTML = '⚠ rinya.geojson が見つかりません。<br>ファイルを配置してください。';
         return div;
       };
       info.addTo(map);
