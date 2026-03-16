@@ -388,20 +388,6 @@
               maxWidth: 260
             });
           }
-
-          // ホバー時のハイライト（ポリゴン・ライン用）
-          layer.on({
-            mouseover: function (e) {
-              const l = e.target;
-              if (l.setStyle) {
-                l.setStyle({ weight: 3, fillOpacity: 0.9 });
-                l.bringToFront();
-              }
-            },
-            mouseout: function (e) {
-              geojsonLayer.resetStyle(e.target);
-            }
-          });
         }
       }).addTo(map);
 
