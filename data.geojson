@@ -1,0 +1,77 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "函館市中心部",
+        "category": "A",
+        "description": "函館市の中心エリア"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [140.720, 41.760],
+            [140.740, 41.760],
+            [140.740, 41.775],
+            [140.720, 41.775],
+            [140.720, 41.760]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "五稜郭エリア",
+        "category": "B",
+        "description": "五稜郭公園周辺"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [140.740, 41.775],
+            [140.760, 41.775],
+            [140.760, 41.790],
+            [140.740, 41.790],
+            [140.740, 41.775]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "湯川エリア",
+        "category": "C",
+        "description": "湯の川温泉周辺"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [140.760, 41.760],
+            [140.780, 41.760],
+            [140.780, 41.775],
+            [140.760, 41.775],
+            [140.760, 41.760]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "函館山",
+        "category": "D",
+        "description": "函館山展望台エリア"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [140.700, 41.757]
+      }
+    }
+  ]
+}

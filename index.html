@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>函館市 GeoJSON マップ</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+
+    header {
+      background: #2c3e50;
+      color: #fff;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100vh - 50px);
+    }
+
+    /* 凡例 */
+    .legend {
+      background: rgba(255, 255, 255, 0.92);
+      padding: 12px 16px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      font-size: 13px;
+      line-height: 1.6;
+      min-width: 140px;
+    }
+
+    .legend h4 {
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .legend-color {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.2);
+      flex-shrink: 0;
+    }
+
+    /* ポップアップのカスタム */
+    .popup-content {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .popup-content strong {
+      font-size: 14px;
+      display: block;
+      margin-bottom: 4px;
+      color: #2c3e50;
+    }
+
+    .popup-category {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🗺 函館市 GeoJSON マップ</h1>
+</header>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+<script>
+  // ======================================================
+  // 設定: カテゴリ別の色マッピング
+  // ここに属性値と色の対応を追加してください
+  // ======================================================
+  const CATEGORY_COLORS = {
+    'A': { color: '#e74c3c', label: 'カテゴリ A' },
+    'B': { color: '#3498db', label: 'カテゴリ B' },
+    'C': { color: '#2ecc71', label: 'カテゴリ C' },
+    'D': { color: '#f39c12', label: 'カテゴリ D' },
+    'default': { color: '#95a5a6', label: 'その他' }
+  };
+
+  // ======================================================
+  // 設定: 色を決めるために使う属性名
+  // GeoJSONのpropertiesの中のキーを指定してください
+  // ======================================================
+  const COLOR_ATTRIBUTE = 'category';
+
+  // ======================================================
+  // 地図の初期化（函館市付近）
+  // ======================================================
+  const map = L.map('map').setView([41.7688, 140.7291], 13);
+
+  // タイルレイヤー（OpenStreetMap）
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  // ======================================================
+  // ユーティリティ関数
+  // ======================================================
+
+  /**
+   * 属性値に対応する色を返す
+   * @param {string|number} value - 属性値
+   * @returns {string} カラーコード
+   */
+  function getColor(value) {
+    const entry = CATEGORY_COLORS[value];
+    return entry ? entry.color : CATEGORY_COLORS['default'].color;
+  }
+
+  /**
+   * フィーチャーのスタイルを返す（ポリゴン・ライン用）
+   * @param {Object} feature - GeoJSONフィーチャー
+   * @returns {Object} Leaflet スタイルオブジェクト
+   */
+  function featureStyle(feature) {
+    const value = feature.properties ? feature.properties[COLOR_ATTRIBUTE] : null;
+    const color = getColor(value);
+    return {
+      fillColor: color,
+      color: color,
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: 0.5
+    };
+  }
+
+  /**
+   * ポップアップの HTML コンテンツを生成する
+   * @param {Object} properties - フィーチャーのプロパティ
+   * @returns {string} HTML 文字列
+   */
+  function buildPopupContent(properties) {
+    const value = properties[COLOR_ATTRIBUTE];
+    const color = getColor(value);
+    const props = Object.entries(properties)
+      .map(([k, v]) => `<tr><td style="color:#666;padding-right:8px;">${k}</td><td><b>${v}</b></td></tr>`)
+      .join('');
+
+    return `
+      <div class="popup-content">
+        <strong>${properties.name || '(名称なし)'}</strong>
+        <span class="popup-category" style="background:${color};">${value || '-'}</span>
+        <table style="border-collapse:collapse;margin-top:4px;">${props}</table>
+      </div>`;
+  }
+
+  // ======================================================
+  // GeoJSON の読み込みと表示
+  // ======================================================
+  fetch('data.geojson')
+    .then(response => {
+      if (!response.ok) throw new Error('GeoJSON の読み込みに失敗しました: ' + response.status);
+      return response.json();
+    })
+    .then(geojsonData => {
+      const geojsonLayer = L.geoJSON(geojsonData, {
+        // ポリゴン・ラインのスタイル
+        style: featureStyle,
+
+        // ポイントフィーチャーをカスタムマーカーに変換
+        pointToLayer: function (feature, latlng) {
+          const value = feature.properties ? feature.properties[COLOR_ATTRIBUTE] : null;
+          const color = getColor(value);
+          return L.circleMarker(latlng, {
+            radius: 10,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.85
+          });
+        },
+
+        // 各フィーチャーにポップアップとホバー効果を追加
+        onEachFeature: function (feature, layer) {
+          if (feature.properties) {
+            layer.bindPopup(buildPopupContent(feature.properties), {
+              maxWidth: 260
+            });
+          }
+
+          // ホバー時のハイライト（ポリゴン・ライン用）
+          layer.on({
+            mouseover: function (e) {
+              const l = e.target;
+              if (l.setStyle) {
+                l.setStyle({ weight: 4, fillOpacity: 0.75 });
+                l.bringToFront();
+              }
+            },
+            mouseout: function (e) {
+              geojsonLayer.resetStyle(e.target);
+            }
+          });
+        }
+      }).addTo(map);
+
+      // データの範囲に地図をフィット（フィーチャーがあれば）
+      if (geojsonLayer.getBounds().isValid()) {
+        map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30] });
+      }
+
+      addLegend();
+    })
+    .catch(error => {
+      console.error(error);
+      // GeoJSON が見つからない場合のフォールバック表示
+      const info = L.control({ position: 'topright' });
+      info.onAdd = function () {
+        const div = L.DomUtil.create('div');
+        div.style.cssText = 'background:#fff;padding:10px;border-radius:4px;border:1px solid #e74c3c;color:#e74c3c;font-size:13px;';
+        div.innerHTML = '⚠ data.geojson が見つかりません。<br>ファイルを配置してください。';
+        return div;
+      };
+      info.addTo(map);
+    });
+
+  // ======================================================
+  // 凡例の追加
+  // ======================================================
+  function addLegend() {
+    const legend = L.control({ position: 'bottomright' });
+
+    legend.onAdd = function () {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = '<h4>凡例</h4>';
+
+      Object.entries(CATEGORY_COLORS).forEach(([key, val]) => {
+        if (key === 'default') return;
+        div.innerHTML += `
+          <div class="legend-item">
+            <span class="legend-color" style="background:${val.color};"></span>
+            <span>${val.label}</span>
+          </div>`;
+      });
+
+      return div;
+    };
+
+    legend.addTo(map);
+  }
+</script>
+
+</body>
+</html>
