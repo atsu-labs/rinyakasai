@@ -74,6 +74,67 @@
       flex-shrink: 0;
     }
 
+    /* 左側コントロールパネル */
+    #control-panel {
+      position: fixed;
+      top: 50px;
+      left: 0;
+      width: 180px;
+      background: rgba(255, 255, 255, 0.97);
+      padding: 14px 16px;
+      z-index: 1000;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.25);
+      max-height: calc(100vh - 50px);
+      overflow-y: auto;
+      font-size: 13px;
+    }
+
+    #control-panel h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #2c3e50;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 6px;
+    }
+
+    .zone-control {
+      margin-bottom: 14px;
+    }
+
+    .zone-name {
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: #2c3e50;
+      font-size: 13px;
+    }
+
+    .state-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .state-option input[type="radio"] {
+      cursor: pointer;
+      accent-color: #2c3e50;
+    }
+
+    .state-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .state-dot-keipo   { background: #cc0000; }
+    .state-dot-chuitu  { background: #ffcc00; }
+    .state-dot-nasi    { background: #95a5a6; border: 1px solid #bbb; }
+
     /* ポップアップのカスタム */
     .popup-content {
       font-size: 13px;
@@ -106,6 +167,75 @@
 
 <div id="map"></div>
 
+<!-- 左側コントロールパネル -->
+<div id="control-panel">
+  <h3>⚠ 状態設定</h3>
+
+  <div class="zone-control">
+    <div class="zone-name">函館</div>
+    <label class="state-option">
+      <input type="radio" name="state-函館" value="警報">
+      <span class="state-dot state-dot-keipo"></span>警報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-函館" value="注意報">
+      <span class="state-dot state-dot-chuitu"></span>注意報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-函館" value="なし" checked>
+      <span class="state-dot state-dot-nasi"></span>なし
+    </label>
+  </div>
+
+  <div class="zone-control">
+    <div class="zone-name">高松</div>
+    <label class="state-option">
+      <input type="radio" name="state-高松" value="警報">
+      <span class="state-dot state-dot-keipo"></span>警報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-高松" value="注意報">
+      <span class="state-dot state-dot-chuitu"></span>注意報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-高松" value="なし" checked>
+      <span class="state-dot state-dot-nasi"></span>なし
+    </label>
+  </div>
+
+  <div class="zone-control">
+    <div class="zone-name">戸井泊</div>
+    <label class="state-option">
+      <input type="radio" name="state-戸井泊" value="警報">
+      <span class="state-dot state-dot-keipo"></span>警報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-戸井泊" value="注意報">
+      <span class="state-dot state-dot-chuitu"></span>注意報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-戸井泊" value="なし" checked>
+      <span class="state-dot state-dot-nasi"></span>なし
+    </label>
+  </div>
+
+  <div class="zone-control">
+    <div class="zone-name">川汲</div>
+    <label class="state-option">
+      <input type="radio" name="state-川汲" value="警報">
+      <span class="state-dot state-dot-keipo"></span>警報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-川汲" value="注意報">
+      <span class="state-dot state-dot-chuitu"></span>注意報
+    </label>
+    <label class="state-option">
+      <input type="radio" name="state-川汲" value="なし" checked>
+      <span class="state-dot state-dot-nasi"></span>なし
+    </label>
+  </div>
+</div>
+
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
@@ -123,10 +253,31 @@
   };
 
   // ======================================================
+  // 状態別の色マッピング
+  // 警報・注意報の状態がなし（通常）のときはカテゴリ色を使用
+  // ======================================================
+  const STATE_COLORS = {
+    '警報':  '#cc0000',
+    '注意報': '#ffcc00',
+    'なし':  null        // カテゴリ本来の色を使用
+  };
+
+  // 各区分の現在の状態（初期値: なし）
+  const zoneStates = {
+    '函館':   'なし',
+    '高松':   'なし',
+    '戸井泊': 'なし',
+    '川汲':   'なし'
+  };
+
+  // ======================================================
   // 設定: 色を決めるために使う属性名
   // GeoJSONのpropertiesの中のキーを指定してください
   // ======================================================
   const COLOR_ATTRIBUTE = '区域';
+
+  // GeoJSON レイヤーを外部スコープに保持（スタイル更新用）
+  let geojsonLayer = null;
 
   // ======================================================
   // 地図の初期化（函館市付近）
@@ -144,7 +295,7 @@
   // ======================================================
 
   /**
-   * 属性値に対応する色を返す
+   * 属性値に対応する色を返す（カテゴリ本来の色）
    * @param {string|number} value - 属性値
    * @returns {string} カラーコード
    */
@@ -154,13 +305,26 @@
   }
 
   /**
+   * 状態を考慮した実効色を返す
+   * @param {string|number} value - 区域属性値
+   * @returns {string} カラーコード
+   */
+  function getEffectiveColor(value) {
+    const state = zoneStates[value];
+    if (state && state !== 'なし' && STATE_COLORS[state]) {
+      return STATE_COLORS[state];
+    }
+    return getColor(value);
+  }
+
+  /**
    * フィーチャーのスタイルを返す（ポリゴン・ライン用）
    * @param {Object} feature - GeoJSONフィーチャー
    * @returns {Object} Leaflet スタイルオブジェクト
    */
   function featureStyle(feature) {
     const value = feature.properties ? feature.properties[COLOR_ATTRIBUTE] : null;
-    const color = getColor(value);
+    const color = getEffectiveColor(value);
     return {
       fillColor: color,
       color: color,
@@ -199,14 +363,14 @@
       return response.json();
     })
     .then(geojsonData => {
-      const geojsonLayer = L.geoJSON(geojsonData, {
+      geojsonLayer = L.geoJSON(geojsonData, {
         // ポリゴン・ラインのスタイル
         style: featureStyle,
 
         // ポイントフィーチャーをカスタムマーカーに変換
         pointToLayer: function (feature, latlng) {
           const value = feature.properties ? feature.properties[COLOR_ATTRIBUTE] : null;
-          const color = getColor(value);
+          const color = getEffectiveColor(value);
           return L.circleMarker(latlng, {
             radius: 10,
             fillColor: color,
@@ -247,6 +411,7 @@
       }
 
       addLegend();
+      addRadioListeners();
     })
     .catch(error => {
       console.error(error);
@@ -271,12 +436,24 @@
       const div = L.DomUtil.create('div', 'legend');
       div.innerHTML = '<h4>凡例</h4>';
 
+      // 状態の色
+      div.innerHTML += `
+        <div class="legend-item">
+          <span class="legend-color state-dot-keipo"></span>
+          <span>警報</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color state-dot-chuitu"></span>
+          <span>注意報</span>
+        </div>`;
+
+      // 区域の色（なし状態）
       Object.entries(CATEGORY_COLORS).forEach(([key, val]) => {
         if (key === 'default') return;
         div.innerHTML += `
           <div class="legend-item">
             <span class="legend-color" style="background:${val.color};"></span>
-            <span>${val.label}</span>
+            <span>${val.label}（なし）</span>
           </div>`;
       });
 
@@ -284,6 +461,24 @@
     };
 
     legend.addTo(map);
+  }
+
+  // ======================================================
+  // ラジオボタンのイベントリスナー登録
+  // ======================================================
+  function addRadioListeners() {
+    const zones = Object.keys(zoneStates);
+    zones.forEach(function (zone) {
+      const radios = document.querySelectorAll('input[name="state-' + zone + '"]');
+      radios.forEach(function (radio) {
+        radio.addEventListener('change', function () {
+          zoneStates[zone] = this.value;
+          if (geojsonLayer) {
+            geojsonLayer.setStyle(featureStyle);
+          }
+        });
+      });
+    });
   }
 </script>
 
