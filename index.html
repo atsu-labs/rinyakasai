@@ -307,9 +307,9 @@
   let geojsonLayer = null;
 
   // ======================================================
-  // 地図の初期化（函館市付近）
+  // 地図の初期化（ポリゴン読み込み後に fitBounds で表示範囲を設定）
   // ======================================================
-  const map = L.map('map').setView([41.7688, 140.7291], 13);
+  const map = L.map('map');
 
   // タイルレイヤー（OpenStreetMap）
   // crossOrigin: 'anonymous' を指定することで leaflet-image による Canvas 書き出しを試みます。
